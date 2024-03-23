@@ -1,0 +1,59 @@
+use anchor_lang::prelude::*;
+use anchor_lang::solana_program::system_program;
+
+#[program]
+mod evo {
+    use super::*;
+
+    #[state]
+    pub struct Evo {
+        pub next_token_id: u64,
+        pub evos: Vec<EvoInfo>,
+    }
+
+    #[derive(Accounts)]
+    pub struct Mint<'info> {
+        #[account(init, payer = user, space = 8 + 8 + 8 + 32)]
+        pub evo: Account<'info, Evo>,
+        pub user: Signer<'info>,
+        pub system_program: Program<'info, System>,
+    }
+
+    #[derive(Accounts)]
+    pub struct Merge<'info> {
+        #[account(mut)]
+        pub evo: Account<'info, Evo>,
+        pub user: Signer<'info>,
+        pub system_program: Program<'info, System>,
+    }
+
+    #[account]
+    pub struct EvoInfo {
+        pub owner: Pubkey,
+        pub value: u64,
+    }
+
+    #[access_control(mint(&self, ctx))]
+    pub fn mint(ctx: Context<Mint>, value: u64) -> ProgramResult {
+        let evo_info = EvoInfo {
+            owner: *ctx.accounts.user.key,
+            value,
+        };
+        ctx.accounts.evo.evos.push(evo_info);
+        ctx.accounts.evo.next_token_id += 1;
+        Ok(())
+    }
+
+    #[access_control(merge(&self, ctx))]
+    pub fn merge(ctx: Context<Merge>, evo1_index: u64, evo2_index: u64) -> ProgramResult {
+        let evo1 = &mut ctx.accounts.evo.evos[evo1_index as usize];
+        let evo2 = &mut ctx.accounts.evo.evos[evo2_index as usize];
+        let new_value = (evo1.value + evo2.value) / 2;
+
+        evo1.value = new_value;
+        evo2.value = new_value;
+
+        Ok(())
+    }
+}
+
